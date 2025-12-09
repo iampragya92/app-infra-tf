@@ -9,3 +9,33 @@ module "network" {
   networks = var.networks
 
 }
+
+module "pip" {
+  depends_on = [ module.rg ]
+  source = "../../modules/azurerm_public_ip"
+  pips = var.pips
+
+}
+
+module "linux_compute" {
+  depends_on = [ module.network,module.pip ]
+  source = "../../modules/azurerm_linux_virtual_machine"
+  vms = var.vms
+
+}
+
+
+module "sql_server" {
+  depends_on = [ module.rg ]
+  source = "../../modules/azurerm_sql_server"
+  sql_servers = var.sql_servers
+
+}
+
+
+module "sql_db" {
+  depends_on = [ module.sql_server ]
+  source = "../../modules/azurerm_sql_database"
+  dbs = var.dbs
+
+}
