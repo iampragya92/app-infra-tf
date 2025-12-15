@@ -39,3 +39,18 @@ module "sql_db" {
   dbs = var.dbs
 
 }
+
+
+module "lb" {
+  depends_on = [ module.pip ]
+  source = "../../modules/azurerm_lb"
+  lbs = var.lbs
+
+}
+
+module "nic2bapassociation" {
+  depends_on = [ module.linux_compute,module.lb ]
+  source = "../../modules/azurerm_nic_bap_association"
+  nictobaps = var.nictobaps
+
+}
