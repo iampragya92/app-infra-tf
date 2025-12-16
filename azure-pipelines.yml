@@ -26,6 +26,7 @@ jobs:
       workingDirectory: '$(working_path)'
 
 - job: Terraformfmt
+  dependsOn: TerraformInitAndValidate
   displayName: Terraform Fmt Job
   steps:
   - task: TerraformTask@5
@@ -38,6 +39,7 @@ jobs:
       environmentServiceNameAzureRM: '$(connection)'
 
 - job: tfsec
+  dependsOn: Terraformfmt
   displayName: Terraform TFsec Scan
   steps:
   - task: tfsec@1
@@ -45,6 +47,7 @@ jobs:
       version: 'v1.26.0'
       dir: '$(working_path)'
 - job: tflint
+  dependsOn: tfsec
   displayName: Terraform TFlint job
   steps:
   - task: PowerShell@2
@@ -55,6 +58,7 @@ jobs:
         tflint --recursive
       workingDirectory: '$(working_path)'
 - job: checkov
+  dependsOn: tflint
   displayName: checkov scanning job
   steps:
   - task: PowerShell@2
@@ -63,6 +67,7 @@ jobs:
       script: 'checkov -d .'
       workingDirectory: '$(working_path)'
 - job: terrascan
+  dependsOn: checkov
   displayName: terrascan job
   steps:
   - task: PowerShell@2
@@ -71,6 +76,7 @@ jobs:
       script: 'terrascan init'
       workingDirectory: '$(working_path)'
 - job: InfraCost
+  dependsOn: terrascan
   displayName: Infra Cost job
   steps:
   - task: PowerShell@2
@@ -79,6 +85,7 @@ jobs:
       script: 'infracost breakdown --path=.'
       workingDirectory: '$(working_path)'
 - job: Terraformplan
+  dependsOn: InfraCost
   displayName: terraform plan job
   steps:
   - task: TerraformTask@5
@@ -97,6 +104,7 @@ jobs:
       workingDirectory: '$(working_path)'
       environmentServiceNameAzureRM: '$(connection)'
 - job: ManualApproval
+  dependsOn: Terraformplan
   pool: server
   displayName: Manual Apparoval
   steps:
@@ -106,6 +114,7 @@ jobs:
       approvers: 'i.pragya1992@gmail.com'
 
 - job: TerraformApply
+  dependsOn: ManualApproval
   displayName: Terraform init and apply 
   steps:
   - task: TerraformTask@5
