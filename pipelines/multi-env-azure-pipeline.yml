@@ -1,0 +1,146 @@
+trigger: none
+
+pool: macminipool
+
+variables:
+  working_path: '$(System.DefaultWorkingDirectory)/environments/${{ parameters.env }}'
+  connection: 'Ado-todo-infra-connection'
+  backend_key: '${{ parameters.env }}.github.tf.tfstate'
+
+parameters:
+- name: env
+  displayName: environments
+  type: string
+  default: dev
+  values:
+  - dev
+  - prod
+
+jobs:
+- job: TerraformInitAndValidate
+  displayName: Terraform init and validate job
+  steps:
+  - task: TerraformTask@5
+    inputs:
+      provider: 'azurerm'
+      command: 'init'
+      workingDirectory: '$(working_path)'
+      backendServiceArm: '$(connection)'
+      backendAzureRmStorageAccountName: 'aibasedtodo'
+      backendAzureRmContainerName: 'tfstate'
+      backendAzureRmKey: '$(backend_key'
+  - task: TerraformTask@5
+    inputs:
+      provider: 'azurerm'
+      command: 'validate'
+      workingDirectory: '$(working_path)'
+
+- job: Terraformfmt
+  dependsOn: TerraformInitAndValidate
+  displayName: Terraform Fmt Job
+  steps:
+  - task: TerraformTask@5
+    inputs:
+      provider: 'azurerm'
+      command: 'custom'
+      workingDirectory: '$(working_path)'
+      outputTo: 'console'
+      customCommand: 'fmt'
+      environmentServiceNameAzureRM: '$(connection)'
+
+- job: tfsec
+  dependsOn: Terraformfmt
+  displayName: Terraform TFsec Scan
+  steps:
+  - task: tfsec@1
+    inputs:
+      version: 'v1.26.0'
+      dir: '$(working_path)'
+- job: tflint
+  continueOnError: true
+  dependsOn: tfsec
+  displayName: Terraform TFlint job
+  steps:
+  - task: PowerShell@2
+    inputs:
+      targetType: 'inline'
+      script: |
+        ls -ltr
+        tflint --recursive
+      workingDirectory: '$(working_path)'
+- job: checkov
+  continueOnError: true
+  dependsOn: tflint
+  displayName: checkov scanning job
+  steps:
+  - task: PowerShell@2
+    inputs:
+      targetType: 'inline'
+      script: 'checkov -d .'
+      workingDirectory: '$(working_path)'
+- job: terrascan
+  dependsOn: checkov
+  displayName: terrascan job
+  steps:
+  - task: PowerShell@2
+    inputs:
+      targetType: 'inline'
+      script: 'terrascan init'
+      workingDirectory: '$(working_path)'
+- job: InfraCost
+  dependsOn: terrascan
+  displayName: Infra Cost job
+  steps:
+  - task: PowerShell@2
+    inputs:
+      targetType: 'inline'
+      script: 'infracost breakdown --path=.'
+      workingDirectory: '$(working_path)'
+- job: Terraformplan
+  dependsOn: InfraCost
+  displayName: terraform plan job
+  steps:
+  - task: TerraformTask@5
+    inputs:
+      provider: 'azurerm'
+      command: 'init'
+      workingDirectory: '$(working_path)'
+      backendServiceArm: '$(connection)'
+      backendAzureRmStorageAccountName: 'aibasedtodo'
+      backendAzureRmContainerName: 'tfstate'
+      backendAzureRmKey: '$(backend_key'
+  - task: TerraformTask@5
+    inputs:
+      provider: 'azurerm'
+      command: 'plan'
+      workingDirectory: '$(working_path)'
+      environmentServiceNameAzureRM: '$(connection)'
+- job: ManualApproval
+  dependsOn: Terraformplan
+  pool: server
+  displayName: Manual Apparoval
+  steps:
+  - task: ManualValidation@1
+    inputs:
+      notifyUsers: 'i.pragya1992@outlook.com'
+      approvers: 'i.pragya1992@outlook.com'
+
+- job: TerraformApply
+  dependsOn: ManualApproval
+  displayName: Terraform init and apply
+  steps:
+  - task: TerraformTask@5
+    inputs:
+      provider: 'azurerm'
+      command: 'init'
+      workingDirectory: '$(working_path)'
+      backendServiceArm: '$(connection)'
+      backendAzureRmStorageAccountName: 'aibasedtodo'
+      backendAzureRmContainerName: 'tfstate'
+      backendAzureRmKey: '$(backend_key'
+  - task: TerraformTask@5
+    inputs:
+      provider: 'azurerm'
+      command: 'apply'
+      workingDirectory: '$(working_path)'
+      environmentServiceNameAzureRM: '$(connection)'
